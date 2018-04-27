@@ -90,8 +90,69 @@ func runQuery(query ...string) {
 	}
 }
 
-func buildRelationship(x, y string) {
+//an alternative/enchancement to this might be to extend each add step to
+//list another category and allow users to respond with which items need relationships
+func buildRelationship(names map[string]string) {
+	var typeX, x, typeY, y string
+	for k, v := range names {
+		if len(typeX) == 0 {
+			typeX = k
+			x = v
+		} else {
+			typeY = k
+			y = v
+		}
+	}
 
+	runQuery(fmt.Sprintf("MATCH (e:%s) WHERE e.name = '%s' MATCH (s:%s) WHERE s.name = '%s' CREATE (e)-[:KNOWS]->(s);", typeX, x, typeY, y))
+	//TODO: relationships should be more descriptive/clear - case by case work out which things are being connected and what that means
+	//TODO: [:KNOWS {level: "advanced"}] - attributes on the relationship
+}
+
+func show(names map[string]string) map[string]map[string][]string {
+	conn, err := neoPool.OpenPool()
+	if err != nil {
+		panic(err)
+	}
+	defer conn.Close()
+
+	results := make(map[string]map[string][]string)
+
+	for t, n := range names {
+		q := fmt.Sprintf("MATCH (n:%s {name: '%s'})-[]-(b) RETURN labels(b) AS label, b.name AS name;", t, n)
+
+		r, err := conn.QueryNeo(q, nil)
+		if err != nil {
+			panic(err)
+		}
+
+		forType := make(map[string][]string)
+
+		rows, _, err := r.All()
+		if err != nil {
+			panic(err)
+		}
+
+		for _, n := range rows {
+
+			labels := n[0].([]interface{})
+			var labelList []string
+			for _, l := range labels {
+				labelList = append(labelList, l.(string))
+			}
+			label := labelList[0]
+			name := n[1].(string)
+
+			l := forType[label]
+			l = append(l, name)
+
+			forType[label] = l
+		}
+
+		results[t] = forType
+	}
+
+	return results
 }
 
 func prompt() {
@@ -102,6 +163,8 @@ func prompt() {
 		// this could print the existing graph or list the skills/people/projects
 		return nil
 	}
+
+	var skillFlag, personFlag, projectFlag string
 
 	app.Commands = []cli.Command{
 		{
@@ -225,6 +288,105 @@ func prompt() {
 					for i, n := range l {
 						i++
 						fmt.Println(strconv.Itoa(i) + ": " + n)
+					}
+				}
+
+				return nil
+			},
+		},
+		{
+			Name:    "build relationships",
+			Aliases: []string{"build", "relate"},
+			Usage:   "build a relationship directly between a skill, person or project",
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:        "skill",
+					Destination: &skillFlag,
+				},
+				cli.StringFlag{
+					Name:        "person",
+					Destination: &personFlag,
+				},
+				cli.StringFlag{
+					Name:        "project",
+					Destination: &projectFlag,
+				},
+			},
+			Action: func(c *cli.Context) error {
+				var count int
+				names := make(map[string]string)
+				if len(skillFlag) != 0 {
+					count++
+					names["Skill"] = skillFlag
+					fmt.Println("skill provided: " + skillFlag)
+				}
+				if len(personFlag) != 0 {
+					count++
+					names["Person"] = personFlag
+					fmt.Println("person provided: " + personFlag)
+				}
+				if len(projectFlag) != 0 {
+					count++
+					names["Project"] = projectFlag
+					fmt.Println("project provided: " + projectFlag)
+				}
+
+				if count == 2 {
+					buildRelationship(names)
+				} else {
+					fmt.Println("can only build relationships between 2 value of different categories")
+				}
+				return nil
+			},
+		},
+		{
+			Name:    "show relationships",
+			Aliases: []string{"show"},
+			Usage:   "show all relationships associated with a skill, person or project",
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:        "skill",
+					Destination: &skillFlag,
+				},
+				cli.StringFlag{
+					Name:        "person",
+					Destination: &personFlag,
+				},
+				cli.StringFlag{
+					Name:        "project",
+					Destination: &projectFlag,
+				},
+			},
+			Action: func(c *cli.Context) error {
+				names := make(map[string]string)
+				if len(skillFlag) != 0 {
+					names["Skill"] = skillFlag
+					fmt.Println("skill provided: " + skillFlag)
+				}
+				if len(personFlag) != 0 {
+					names["Person"] = personFlag
+					fmt.Println("person provided: " + personFlag)
+				}
+				if len(projectFlag) != 0 {
+					names["Project"] = projectFlag
+					fmt.Println("project provided: " + projectFlag)
+				}
+
+				results := show(names)
+
+				//DO THE OUTPUT
+				if results != nil {
+					for t, r := range results {
+						fmt.Println("For the requested: " + t)
+
+						for typ, list := range r {
+							fmt.Println("List of related " + typ)
+
+							for i, n := range list {
+								i++
+								fmt.Println(strconv.Itoa(i) + ": " + n)
+							}
+						}
 					}
 				}
 
