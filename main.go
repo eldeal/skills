@@ -13,6 +13,8 @@ import (
 
 var neoPool bolt.ClosableDriverPool
 
+var plurals map[string]string
+
 func main() {
 	var err error
 	neoPool, err = bolt.NewClosableDriverPool("bolt://localhost:7687", 1)
@@ -24,6 +26,12 @@ func main() {
 		"CREATE CONSTRAINT ON (f:Project) ASSERT f.name IS UNIQUE;",
 		"CREATE CONSTRAINT ON (n:Person) ASSERT n.name IS UNIQUE;")
 	fmt.Println("constraints done, obeying prompt...")
+	plurals = map[string]string{
+		"skill":   "skills",
+		"person":  "people",
+		"project": "projects",
+	}
+
 	prompt()
 }
 
@@ -46,14 +54,15 @@ func add(query string, args ...string) {
 	}
 }
 
-func list(query string, limit int) []string {
+func list(query string) []string {
 	conn, err := neoPool.OpenPool()
 	if err != nil {
 		panic(err)
 	}
 	defer conn.Close()
 
-	r, err := conn.QueryNeo(query, map[string]interface{}{"limit": limit})
+	fmt.Println("Running query: " + query)
+	r, err := conn.QueryNeo(query, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -208,83 +217,28 @@ func prompt() {
 			},
 		},
 		{
-			Name:    "list skills",
-			Aliases: []string{"list-skills"},
-			Usage:   "list all skills currently being tracked",
+			Name:    "list",
+			Aliases: []string{"list", "l"},
+			Usage:   "list all elements currently being tracked",
 			Action: func(c *cli.Context) error {
-				limit := "25"
-				if c.NArg() != 0 {
-					limit = c.Args()[0]
-				}
+				var flag, limit string
 
-				ln, err := strconv.Atoi(limit)
-				if err != nil {
-					fmt.Println(limit + " <<-- this is not a number!")
-					return nil
-				}
+				if c.NArg() > 0 && c.NArg() < 3 {
+					flag = strings.Title(c.Args()[0])
 
-				l := list("MATCH (n:Skill ) RETURN n.name as name LIMIT {limit} ;", ln)
-
-				if l != nil {
-					fmt.Println("List of skills")
-					for i, n := range l {
-						i++
-						fmt.Println(strconv.Itoa(i) + ": " + n)
+					limit = "25"
+					if c.NArg() == 2 {
+						limit = c.Args()[1]
 					}
-				}
-
-				return nil
-			},
-		},
-		{
-			Name:    "list people",
-			Aliases: []string{"list-people"},
-			Usage:   "list all people currently being tracked",
-			Action: func(c *cli.Context) error {
-				limit := "25"
-				if c.NArg() != 0 {
-					limit = c.Args()[0]
-				}
-
-				ln, err := strconv.Atoi(limit)
-				if err != nil {
-					fmt.Println(limit + " <<-- this is not a number!")
+				} else {
+					fmt.Println("must provide a type argument (optional limit argument). further arguments are invalid")
 					return nil
 				}
 
-				l := list("MATCH (n:Person ) RETURN n.name as name LIMIT {limit} ;", ln)
+				l := list(fmt.Sprintf("MATCH (n:%s) RETURN n.name as name LIMIT %s ;", flag, limit))
 
 				if l != nil {
-					fmt.Println("List of people")
-					for i, n := range l {
-						i++
-						fmt.Println(strconv.Itoa(i) + ": " + n)
-					}
-				}
-
-				return nil
-			},
-		},
-		{
-			Name:    "list projects",
-			Aliases: []string{"list-projects"},
-			Usage:   "list all projects currently being tracked",
-			Action: func(c *cli.Context) error {
-				limit := "25"
-				if c.NArg() != 0 {
-					limit = c.Args()[0]
-				}
-
-				ln, err := strconv.Atoi(limit)
-				if err != nil {
-					fmt.Println(limit + " <<-- this is not a number!")
-					return nil
-				}
-
-				l := list("MATCH (n:Project ) RETURN n.name as name LIMIT {limit} ;", ln)
-
-				if l != nil {
-					fmt.Println("List of projects")
+					fmt.Println("List of " + plurals[flag])
 					for i, n := range l {
 						i++
 						fmt.Println(strconv.Itoa(i) + ": " + n)
