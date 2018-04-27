@@ -35,23 +35,22 @@ func main() {
 	prompt()
 }
 
-func add(query string, args ...string) {
+func add(query string) {
 	conn, err := neoPool.OpenPool()
 	if err != nil {
 		panic(err)
 	}
 	defer conn.Close()
 
-	for _, v := range args {
-		_, err = conn.ExecNeo(query, map[string]interface{}{"name": v})
-		if err != nil {
-			if strings.Contains(err.Error(), "Neo.ClientError.Schema.ConstraintValidationFailed") {
-				fmt.Println(fmt.Sprintf("constraint violation, no-op on: [%s]", v))
-				continue
-			}
-			panic(err)
+	_, err = conn.ExecNeo(query, nil)
+	if err != nil {
+		if strings.Contains(err.Error(), "Neo.ClientError.Schema.ConstraintValidationFailed") {
+			fmt.Println(fmt.Sprintf("constraint violation, no-op on: [%s]", query))
+			return
 		}
+		panic(err)
 	}
+
 }
 
 func list(query string) []string {
@@ -177,38 +176,14 @@ func prompt() {
 
 	app.Commands = []cli.Command{
 		{
-			Name:    "add skill",
-			Aliases: []string{"skill"},
-			Usage:   "add a skill not currently being tracked",
+			Name:    "add",
+			Aliases: []string{"add", "a"},
+			Usage:   "add something not currently being tracked",
 			Action: func(c *cli.Context) error {
-				if c.NArg() > 0 {
-					add("CREATE (s:Skill { name: {name} });", c.Args()...)
-				} else {
-					fmt.Println("must provide argument")
-				}
-				return nil
-			},
-		},
-		{
-			Name:    "add person",
-			Aliases: []string{"person"},
-			Usage:   "add a person not currently being tracked",
-			Action: func(c *cli.Context) error {
-				if c.NArg() > 0 {
-					add("CREATE (p:Person { name: {name} });", c.Args()...)
-				} else {
-					fmt.Println("must provide argument")
-				}
-				return nil
-			},
-		},
-		{
-			Name:    "add project",
-			Aliases: []string{"project"},
-			Usage:   "add a project not currently being tracked",
-			Action: func(c *cli.Context) error {
-				if c.NArg() > 0 {
-					add("CREATE (j:Project { name: {name} });", c.Args()...)
+				if c.NArg() == 2 {
+					q := fmt.Sprintf("CREATE (j:%s { name: '{%s}' });", strings.Title(c.Args()[0]), c.Args()[1])
+					add(q)
+					fmt.Println("added: " + c.Args()[1])
 					//TODO: Add optional attributes like other names (aliases, check for uniqueness), organization, length, year
 				} else {
 					fmt.Println("must provide argument")
