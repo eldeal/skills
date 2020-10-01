@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/ONSdigital/go-ns/server"
 	"github.com/gorilla/mux"
 )
 
@@ -22,8 +21,7 @@ func main() {
 	r.HandleFunc("/library/{id}/checkout", checkoutBook).Methods("POST")
 	r.HandleFunc("/library/{id}/checkout", checkinBook).Methods("PUT")
 
-	srv := server.New(":8080", r)
-	srv.ListenAndServe()
+	http.ListenAndServe(":8080", r)
 }
 
 type Book struct {
