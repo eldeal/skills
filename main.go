@@ -2,8 +2,8 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"time"
 
@@ -57,7 +57,7 @@ func createBook(w http.ResponseWriter, r *http.Request) {
 	b, err := ioutil.ReadAll(r.Body)
 	defer r.Body.Close()
 	if err != nil {
-		fmt.Println("error reading request body to create book")
+		log.Println("error reading request body to create book")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -66,7 +66,7 @@ func createBook(w http.ResponseWriter, r *http.Request) {
 	var book Book
 	err = json.Unmarshal(b, &book)
 	if err != nil {
-		fmt.Println("error returned from json unmarshal when creating book")
+		log.Println("error returned from json unmarshal when creating book")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -80,7 +80,7 @@ func createBook(w http.ResponseWriter, r *http.Request) {
 func listBooks(w http.ResponseWriter, r *http.Request) {
 	b, err := json.Marshal(lib)
 	if err != nil {
-		fmt.Println("error returned from json marshal")
+		log.Println("error returned from json marshal")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -102,14 +102,14 @@ func getBook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if book == nil {
-		fmt.Println("book not found in list")
+		log.Println("book not found in list")
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 
 	b, err := json.Marshal(book)
 	if err != nil {
-		fmt.Println("error returned from json marshal")
+		log.Println("error returned from json marshal")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
