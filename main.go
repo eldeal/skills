@@ -2,10 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/gorilla/mux"
 )
@@ -24,93 +24,50 @@ func main() {
 	http.ListenAndServe(":8080", r)
 }
 
-type Book struct {
-	Title   string
-	Self    *Link
-	History []Checkout
-}
-
-type Checkout struct {
-	Who    string
-	Out    time.Time
-	In     time.Time
-	Review int
-}
-
-type Link struct {
-	HRef string
-	ID   string
-}
-
-var lib []Book
-
-func init() {
-	lib = append(lib, Book{
-		Title: "Book 1",
-		Self: &Link{
-			HRef: "amazon.com",
-			ID:   "1",
-		},
-	})
-}
 func createBook(w http.ResponseWriter, r *http.Request) {
 	b, err := ioutil.ReadAll(r.Body)
 	defer r.Body.Close()
 	if err != nil {
-		log.Println("error reading request body to create book")
-		w.WriteHeader(http.StatusInternalServerError)
+		readFailed(w, err)
 		return
 	}
 
-	// Unmarshal to the shape of Response struct
 	var book Book
 	err = json.Unmarshal(b, &book)
 	if err != nil {
-		log.Println("error returned from json unmarshal when creating book")
-		w.WriteHeader(http.StatusInternalServerError)
+		unmarshalFailed(w, err)
 		return
 	}
 
-	lib = append(lib, book)
+	add(book)
 
 	w.Header().Set("content-type", "application/json")
 	w.Write(b)
 }
 
 func listBooks(w http.ResponseWriter, r *http.Request) {
-	b, err := json.Marshal(lib)
+	b, err := json.Marshal(getAll())
 	if err != nil {
-		log.Println("error returned from json marshal")
-		w.WriteHeader(http.StatusInternalServerError)
+		marshalFailed(w, err)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(b)
-
 }
 
 func getBook(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
 
-	var book *Book
-	for _, l := range lib {
-		if l.Self.ID == id {
-			book = &l
-			break
-		}
-	}
-
+	book := get(id)
 	if book == nil {
-		log.Println("book not found in list")
-		w.WriteHeader(http.StatusNotFound)
+		bookNotFound(w)
 		return
 	}
 
 	b, err := json.Marshal(book)
 	if err != nil {
-		log.Println("error returned from json marshal")
-		w.WriteHeader(http.StatusInternalServerError)
+		marshalFailed(w, err)
 		return
 	}
 
@@ -119,11 +76,67 @@ func getBook(w http.ResponseWriter, r *http.Request) {
 }
 
 func checkoutBook(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
+	book := get(mux.Vars(r)["id"])
+	if book == nil {
+		bookNotFound(w)
+		return
+	}
+
+	b, err := ioutil.ReadAll(r.Body)
+	defer r.Body.Close()
+	if err != nil {
+		readFailed(w, err)
+		return
+	}
+
+	var co Checkout
+	err = json.Unmarshal(b, &co)
+	if err != nil {
+		unmarshalFailed(w, err)
+		return
+	}
+
+	if err := checkout(book, co.Who); err != nil {
+		log.Println(fmt.Sprintf("could not check out book: [%s]", err.Error()))
+		http.Error(w, "invalid checkout details provided", http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(b)
 	return
 }
 
 func checkinBook(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
+	b, err := ioutil.ReadAll(r.Body)
+	defer r.Body.Close()
+	if err != nil {
+		readFailed(w, err)
+		return
+	}
+
+	var co Checkout
+	err = json.Unmarshal(b, &co)
+	if err != nil {
+		unmarshalFailed(w, err)
+		return
+	}
+
+	book := get(mux.Vars(r)["id"])
+	if book == nil {
+		bookNotFound(w)
+		return
+	}
+
+	if err := checkout(book, co.Who); err != nil {
+		log.Println("could not check out book: [%s]", err.Error)
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(b)
 	return
 }
