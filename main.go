@@ -6,12 +6,12 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/gorilla/mux"
 )
 
 func main() {
-
 	r := mux.NewRouter()
 
 	r.HandleFunc("/library", createBook).Methods("POST")
@@ -21,7 +21,10 @@ func main() {
 	r.HandleFunc("/library/{id}/checkout", checkoutBook).Methods("POST")
 	r.HandleFunc("/library/{id}/checkout", checkinBook).Methods("PUT")
 
-	http.ListenAndServe(":8080", r)
+	if err := http.ListenAndServe(":8080", r); err != nil {
+		log.Println("Unable to listen: ", err)
+		os.Exit(1)
+	}
 }
 
 func createBook(w http.ResponseWriter, r *http.Request) {
@@ -105,7 +108,6 @@ func checkoutBook(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(b)
-	return
 }
 
 func checkinBook(w http.ResponseWriter, r *http.Request) {
@@ -138,5 +140,4 @@ func checkinBook(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(b)
-	return
 }
